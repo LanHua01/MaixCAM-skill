@@ -76,16 +76,26 @@ data = serial.read()
 ```
 
 - 先用 `uart.list_devices()` 确认设备；115200 是可靠的起始波特率，但仍以用户的下位机约束为准。
-- UART0 是 A16 TX、A17 RX、`/dev/ttyS0`，会输出启动日志，且 A16 上电被外部拉低可能导致无法启动；仅在用户已确认接线和启动风险时使用。
-- GND 必须共地，RX/TX 交叉连接；MaixCAM Type-C 转接板方向可能交换 RX/TX。
+- GND 必须共地，RX/TX 交叉连接。
 - `write_str()` 发送 `str`，`write()` 发送 `bytes`。回调 `set_received_callback()` 与轮询 `read()` 不得混用。
 - 串口是字节流，粘包、拆包、超时、日志限流和系统启动杂字节由协议层处理。
+
+### MaixCAM 已确认注意事项
+
+- UART0 是 A16 TX、A17 RX、`/dev/ttyS0`，会输出启动日志，且 A16 上电被外部拉低可能导致无法启动；仅在用户已确认接线和启动风险时使用。
+- MaixCAM 的 Type-C 转接板方向可能交换 RX/TX；接线前按该板的实际丝印和文档确认。
+
+### MaixCAM Pro 注意事项
+
+- 不把上述 MaixCAM Type-C 转接板换向风险泛化到 MaixCAM Pro。
+- 对 Pro 的 UART0、转接板、启动日志与引脚复用，只能按具体板卡、扩展板和官方资料确认；资料不足时保留为待确认项并优先使用已验证的 UART1 方案。
 
 ## YOLO
 
 ```python
 from maix import app, camera, display, image, nn
 
+# 仅在版本矩阵确认支持后选择对应模型类
 detector = nn.YOLOv5(model="models/target.mud", dual_buff=True)
 cam = camera.Camera(detector.input_width(), detector.input_height(), detector.input_format())
 disp = display.Display()
@@ -98,7 +108,8 @@ while not app.need_exit():
     disp.show(img)
 ```
 
-- 先确认 `.mud` 模型、类别顺序、模型输入尺寸与图像格式。
+- 先确认 `.mud` 模型、类别顺序、模型输入尺寸、图像格式和板端 MaixPy 版本。
+- 官方模型类/最低 MaixPy 版本：`nn.YOLOv5`（当前文档默认可用）、`nn.YOLOv8`（>= 4.3.0）、`nn.YOLO11`（>= 4.7.0）、`nn.YOLO26`（>= 4.12.5）。先用目标板版本筛选，再比较精度、时延、模型输入和部署资源；版本不足时不得输出对应模型类。
 - `dual_buff=True` 会提高吞吐，但 `detect()` 的结果对应上一帧输入；严格同步的瞄准、测量或闭环控制应使用 `dual_buff=False`，或显式保存时间戳并补偿一帧延迟。
 - 置信度、IOU、ROI、尺寸和时序稳定性应结合使用；单帧模型结果不得直接触发危险动作。
 - 模型加载或格式不匹配失败时，显示错误并进入安全降级，不让主循环崩溃。
