@@ -1,77 +1,67 @@
 ---
 name: maixcam-pro-nuedc
-description: Use when designing, implementing, refactoring, or debugging MaixCAM Pro / MaixPy vision projects for NUEDC-style competitions, including task decomposition, camera/color/geometry/YOLO vision pipelines, UART or lower-controller integration, project architecture, field debugging, and acceptance testing. Ask task-specific questions before choosing protocols, heartbeat, frame format, coordinate units, task modes, model use, or control interfaces.
+description: Use when designing, implementing, refactoring, or debugging MaixCAM Pro / MaixPy vision projects for NUEDC-style competitions, including task decomposition, camera/color/geometry/YOLO vision pipelines, UART or lower-controller integration, project architecture, field debugging, and acceptance testing.
 metadata:
   short-description: MaixCAM Pro 电赛视觉工程方法
 ---
 
 # MaixCAM Pro NUEDC Skill
 
-本 skill 面向 MaixCAM Pro + MaixPy 的电赛视觉工程。它固化稳定的工程思维、MaixCAM Pro 语法约束和调试流程，但不固定某一套题目协议、坐标格式、心跳、任务模式或模型方案。
+本 skill 用于 MaixCAM Pro + MaixPy 电赛视觉工程的拆题、方案选择、实现、调试和验收。它固化工程方法与 MaixPy 约束，不绑定某一年赛题、固定串口协议、坐标单位、心跳、任务模式或模型。
 
-## 使用原则
+## 硬规则
 
-1. 先问约束，再定方案。
-2. 固化工程分层，不固化题目策略。
-3. 先让单模块可验证，再做闭环联调。
-4. 所有 MaixCAM Pro 代码建议必须符合 MaixPy API，不混入 OpenMV、K210、树莓派或 PC OpenCV 的专属写法。
-5. 当协议、坐标单位、发送周期、ACK、心跳、下位机命令格式、是否使用 YOLO 不明确时，必须先询问用户，不能擅自默认。
+1. 所有正向代码示例必须符合 MaixPy 官方 API；不得混入 OpenMV、K210、树莓派或 PC OpenCV 专属写法。
+2. 先让相机、视觉、通信、执行机构各自可测，再做闭环联调。
+3. 协议、坐标、频率、ACK、心跳、UI、模型和任务模式均为待确认决策，不得擅自固定。
+4. 题目陌生时先查 `references/nuedc-topic-coverage.md`；没有适配历史模式时，基于题面约束提出候选方案并询问用户，而不是强套旧题。
 
-## 快速流程
+## 首次使用门禁
 
-### 1. 题目约束澄清
+当用户的提示词和上传文件没有同时提供以下关键事实时，先使用 `templates/task-intake-questions.md` 收集信息；此时不得直接生成工程代码或固定协议。
 
-先收集这些信息，缺失时优先询问：
+- 题型、任务目标、评分指标、已知规则或题面。
+- 识别对象、输出对象、精度/时限与失效后动作。
+- MaixCAM Pro 型号、相机/镜头、安装方式、相机引脚或设备信息。
+- 屏幕型号、像素尺寸、方向、是否需要触摸。
+- 下位机、执行机构、引脚、逻辑电平、供电、急停与已有接线。
+- 场地、光照、目标尺寸、允许/禁止使用的硬件或算法。
 
-- 识别对象：激光点、色块、圆点、黑框、边线、棋盘、二维码、火焰、动物、车辆、棋子等。
-- 输出对象：像素坐标、物理坐标、目标类别、状态机事件、控制误差、路径点等。
-- 控制对象：仅 MaixCAM 显示/记录，还是要驱动 STM32/MSPM0/Arduino/电机/舵机/机械臂。
-- 评分指标：精度、速度、稳定时间、误检次数、漏检次数、闭环成功率、赛场抗干扰。
-- 环境条件：光照、背景、靶纸尺寸、镜头距离、相机固定方式、是否允许补光。
-- 接口边界：串口/I2C/SPI/网络/文件；谁主动发，谁回包，是否需要 ACK 或在线状态。
+题面、接线表、现有协议或模型已上传时，先提取已知项，仅追问缺项，不重复索要已有信息。
 
-详细问询模板见 `templates/task-intake-questions.md`。
+## 方案选择门禁
 
-### 2. 视觉路线选择
+### 1. 先给候选方案
 
-按题目约束选择最小可行路线：
+在关键配置足够后，先按 `templates/solution-options.md` 给出 2–3 套可行方案。每套方案必须同时说明：
 
-- 颜色/激光：优先 `img.find_blobs()` + ROI + 曝光/白平衡控制 + 缓存/滤波。
-- 黑线/边框/几何：优先灰度/阈值/线段/矩形/轮廓思路，必要时做透视或标定。
-- 棋盘/格点：先定位棋盘坐标系，再映射格点，再识别占用状态。
-- 目标检测：仅当颜色/几何规则不稳定或目标外观复杂时使用 YOLO。
-- 混合方案：用传统视觉提供坐标和约束，用 YOLO 处理类别或复杂目标。
+- 识别方式和降级路线：颜色/几何/标定/YOLO/融合。
+- 通信接口、候选帧格式、信息字段、坐标单位与可靠性策略。
+- 屏幕 UI 显示内容、错误状态和现场调参入口。
+- 主循环、配置、任务、通信、显示、测试模块边界。
+- 性能、精度、时延、风险、调试顺序与安全措施。
 
-历年题型抽象见 `references/nuedc-vision-archetypes.md`。
+### 2. 等待选择
 
-### 3. 工程架构
+用户确认方案及高影响项前，只能给出比较、问询和最小验证建议；不得把候选协议、UI、引脚映射、模型或代码结构当成最终实现。
 
-默认推荐分层，但按项目规模裁剪：
+用户选择后，将未定项明确写为“待确认假设”，再使用 `templates/project-architecture.md` 和 `templates/serial-protocol-decision.md` 输出工程方案。
 
-- `main`：只做初始化、主循环调度、任务切换、性能统计和异常兜底。
-- `config`：集中管理串口、相机、阈值、模型路径、发送周期、调试开关。
-- `tasks`：每个赛题/模式一个任务模块，只接收图像和时间，输出统一 `state`。
-- `communication`：只处理 I/O、协议编码/解码、连接状态，不写视觉算法。
-- `display`：只读 `state` 和通信快照，不反向影响算法。
-- `tests` 或独立脚本：单独验证相机、色块、模型、串口、协议。
+### 3. 选择视觉路线
 
-架构细节见 `references/architecture-patterns.md`，架构模板见 `templates/project-architecture.md`。
+- 颜色/激光：优先 `img.find_blobs()`、ROI、曝光/白平衡和时序过滤。
+- 黑线、边框、靶纸和尺寸：优先几何、标定、单应性或物理坐标映射。
+- 棋盘/格点：先定位棋盘坐标系，再做占用状态差分和落子映射。
+- 类别语义或复杂外观：使用 YOLO；无数据集时使用 `templates/yolo-data-and-training.md` 先做采集、标注、训练和验证计划。
+- 混合方案：传统视觉提供几何/ROI 约束，模型输出类别或复杂目标。
 
-### 4. 接口决策
+## 工程化输出
 
-不要默认固定协议。先确认：
+默认采用可裁剪分层：`main` 调度，`config` 参数，`tasks` 视觉任务，`communication` I/O，`display` UI，`tests` 独立验证。模块只承担一个职责；状态有来源、有效性、时间戳和错误信息；代码以可维护、可调和可降级为目标，不以堆叠冗余分支代替结构。
 
-- 通信方式和物理接线。
-- 数据方向：MaixCAM 主发、下位机主发，还是双向。
-- 帧格式：文本帧、二进制帧、JSON、CSV、Modbus、自定义。
-- 分包规则：帧头、帧尾、长度、校验、转义、超时。
-- 在线机制：无心跳、心跳、ACK、序号、超时重发。
-- 坐标单位：像素、cm、mm、归一化、控制误差。
-- 发送频率：固定周期、状态变化触发、下位机查询响应。
+详细架构见 `references/architecture-patterns.md`，调试顺序见 `references/debugging-playbook.md`。
 
-决策模板见 `templates/serial-protocol-decision.md`。
-
-### 5. MaixCAM Pro 语法硬规则
+## MaixCAM Pro 语法硬规则
 
 常用导入：
 
@@ -79,25 +69,13 @@ metadata:
 from maix import app, camera, display, image, time
 ```
 
-UART 需要时：
+UART、触摸或模型按需导入：
 
 ```python
-from maix import uart
+from maix import uart, touchscreen, nn
 ```
 
-触摸屏需要时：
-
-```python
-from maix import touchscreen
-```
-
-YOLO 需要时：
-
-```python
-from maix import nn
-```
-
-主循环使用：
+主循环：
 
 ```python
 while not app.need_exit():
@@ -107,43 +85,26 @@ while not app.need_exit():
 常见 API：
 
 - `camera.Camera(width, height)`
-- `display.Display()`
-- `disp.show(img)`
+- `display.Display()` 与 `disp.show(img)`
 - `img.find_blobs(thresholds, ...)`
 - `uart.UART(device, baud)`
-- `serial.write_str(text)`
-- `serial.read()`
+- `serial.write_str(text)` 与 `serial.read()`
 - `nn.YOLOv5(model=path, dual_buff=True)`
 - `detector.detect(img, conf_th=..., iou_th=...)`
 
-轮询 `read()` 和 `set_received_callback()` 不要混用。更多 API 注意点见 `references/maixcam-pro-api-notes.md`。
+轮询 `read()` 和 `set_received_callback()` 不要混用。严格同步的闭环任务必须处理 YOLO 双缓冲的一帧结果延迟。完整 API 说明见 `references/maixcam-pro-api-notes.md`。
 
-## 调试工作流
+## 交付前自检
 
-1. 先确认相机画面稳定：分辨率、帧率、焦距、曝光、白平衡。
-2. 再确认单目标识别：只画框/十字，不接控制。
-3. 再确认坐标系：像素方向、物理方向、比例尺、原点。
-4. 再确认通信链路：电脑直连或串口助手先看原始字节。
-5. 再确认下位机解析：粘包、拆包、丢包、阻塞打印、缓冲区溢出。
-6. 最后闭环联调：先低速、限幅、保护，再追求速度和精度。
+使用 `templates/acceptance-checklist.md` 自检：
 
-详细排错清单见 `references/debugging-playbook.md`，验收模板见 `templates/acceptance-checklist.md`。
-
-## 输出要求
-
-当用户让你生成方案或代码时：
-
-- 先说明已知约束和仍需确认的关键决策。
-- 对高影响未知项先提问；低影响未知项可给推荐默认，但要标注为假设。
-- 给代码时优先给可运行的 MaixPy 结构，而不是 PC 伪代码。
-- 保持协议、心跳、坐标单位和任务模式可替换。
-- 给调试建议时按“相机 -> 算法 -> 坐标 -> 通信 -> 下位机 -> 闭环”的顺序排查。
+- 工程是否职责清晰、可独立测试、可维护且避免无意义冗余。
+- 协议、UI、坐标与失效策略是否已由用户确认。
+- 正向代码是否只使用官方 MaixPy API。
+- 公开发布文本是否不含个人信息、令牌、本机路径、私钥或未经授权的数据集。
 
 ## 参考来源
 
-- OpenAI Skills in API: https://developers.openai.com/cookbook/examples/skills_in_api
-- Agent Skills Specification: https://agentskills.io/specification
-- Claude Agent Skills overview: https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview
 - MaixPy 文档首页: https://wiki.sipeed.com/maixpy/doc/zh/index.html
 - MaixPy UART: https://wiki.sipeed.com/maixpy/doc/zh/peripheral/uart.html
 - MaixPy Camera: https://wiki.sipeed.com/maixpy/doc/zh/vision/camera.html

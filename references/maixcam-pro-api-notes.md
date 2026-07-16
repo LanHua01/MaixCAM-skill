@@ -1,161 +1,113 @@
 # MaixCAM Pro API Notes
 
-本文件记录 MaixCAM Pro 电赛项目中最常用、最容易混淆的 MaixPy 写法。使用时以官方文档为准；如果现场版本差异导致 API 不兼容，优先写兼容分支或先做最小验证脚本。
+本文件只记录 MaixCAM Pro 的 MaixPy 写法。语法、引脚和设备结论以链接的 MaixPy 官方文档为准；社区教程只能补充采集、阈值和赛场经验，不能替代 API 依据。
 
-## 基础导入
+## 基础导入与主循环
 
 ```python
 from maix import app, camera, display, image, time
-```
 
-按需导入：
+cam = camera.Camera(width=640, height=480)
+disp = display.Display()
 
-```python
-from maix import uart
-from maix import touchscreen
-from maix import nn
-```
-
-不要把 OpenMV 写法直接搬到 MaixCAM Pro，例如 `sensor.reset()`、`pyb.UART()`、`img.find_rects()` 等是否存在必须以 MaixPy 文档或本机实测为准。
-
-## 主循环
-
-```python
 while not app.need_exit():
     img = cam.read()
-```
-
-需要释放 CPU 时使用：
-
-```python
-time.sleep_ms(1)
+    disp.show(img)
 ```
 
 ## Camera
 
-基础写法：
-
 ```python
-cam = camera.Camera(480, 320)
+from maix import camera, image
+
+cam = camera.Camera(640, 480, image.Format.FMT_RGB888, fps=60)
 img = cam.read()
 ```
 
-兼容格式参数：
+- 分辨率使用偶数；根据相机和任务选择，不以最高分辨率为默认。
+- 严格坐标题要重新标定帧率切换造成的像素偏移。
+- `cam.exposure(...)` 或 `cam.gain(...)` 会进入手动曝光；恢复自动模式使用 `cam.exp_mode(camera.AeMode.Auto)`。
+- 色块、激光和测量题先确认焦距、曝光、白平衡和暖机帧，再调算法。
+
+## Display 与 TouchScreen
 
 ```python
-try:
-    cam = camera.Camera(width, height)
-except TypeError:
-    cam = camera.Camera(width, height, image.Format.FMT_RGB888)
-```
+from maix import display, image, touchscreen
 
-电赛建议：
-
-- 分辨率不是越高越好；闭环和实时识别优先选择足够低但可识别的分辨率。
-- 颜色识别前先稳定曝光、白平衡、补光和镜头焦距。
-- 高帧率与低帧率可能有像素偏移，严格坐标题要重新标定。
-- 开机前几帧可能不稳定，正式算法前跳过或丢弃若干帧。
-
-## Display
-
-```python
 disp = display.Display()
+ts = touchscreen.TouchScreen()
+img = image.Image(disp.width(), disp.height())
+x, y, pressed = ts.read()
 disp.show(img)
 ```
 
-建议：
-
-- 显示层只读算法输出的 `state`。
-- 现场调试时屏幕显示：任务名、通信状态、坐标、目标可见性、错误信息。
-- 不要让显示绘制逻辑反向改变视觉算法状态。
+- 屏幕像素尺寸、方向和触摸映射必须在项目配置中明确。
+- 触摸只产生模式切换或调参事件；不要让显示层直接改写识别结果。
+- 对按下/抬起做消抖和单次触发处理。
 
 ## Image / find_blobs
 
-基础写法：
-
 ```python
+from maix import image
+
 thresholds = [[0, 80, 40, 80, 10, 80]]
 blobs = img.find_blobs(thresholds, pixels_threshold=500)
 for blob in blobs:
-    x, y, w, h = blob.rect()
-    cx = blob.cx()
-    cy = blob.cy()
+    x, y, w, h = blob[0], blob[1], blob[2], blob[3]
+    img.draw_rect(x, y, w, h, image.COLOR_GREEN)
 ```
 
-电赛建议：
-
-- 颜色阈值、面积阈值、像素阈值、宽高范围、长宽比、ROI 都放到配置层。
-- 激光点通常需要小 ROI、低曝光或特定颜色阈值来抗杂光。
-- 色块/圆点可用面积、长宽比、填充率过滤误检。
-- 识别不到时不要立刻输出无效控制量，可按题目决定是否缓存、保持或上报 lost。
+- 阈值为 LAB 颜色空间 `[L_MIN, L_MAX, A_MIN, A_MAX, B_MIN, B_MAX]`。
+- 将 ROI、面积阈值、长宽比、曝光和过滤条件集中在配置层。
+- 激光题优先用小 ROI、低曝光与时序确认，避免反光点触发闭环。
 
 ## UART
 
-MaixCAM Pro 常用默认串口：
-
-- A16: UART0 TX
-- A17: UART0 RX
-- 设备路径常用 `/dev/ttyS0`
-- 推荐波特率优先 `115200`
-
-基础写法：
+自定义下位机通信优先使用 UART1：A19 为 TX、A18 为 RX、设备为 `/dev/ttyS1`。
 
 ```python
-from maix import uart
+from maix import err, pinmap, uart
 
-serial = uart.UART("/dev/ttyS0", 115200)
-serial.write_str("hello")
+err.check_raise(pinmap.set_pin_function("A19", "UART1_TX"), "set UART1 TX failed")
+err.check_raise(pinmap.set_pin_function("A18", "UART1_RX"), "set UART1 RX failed")
+serial = uart.UART("/dev/ttyS1", 115200)
+serial.write_str("ready\r\n")
 data = serial.read()
 ```
 
-注意：
-
-- GND 必须共地。
-- RX/TX 交叉连接。
-- Type-C 转接板方向可能导致 RX/TX 交换。
-- UART0 开机可能输出系统日志；下位机解析要能丢弃无关字节。
-- 轮询 `read()` 和 `set_received_callback()` 不要混用。
-- 协议格式、心跳、ACK、校验和重发策略必须按题目询问后决定。
-
-## TouchScreen
-
-```python
-from maix import touchscreen
-
-ts = touchscreen.TouchScreen()
-x, y, pressed = ts.read()
-```
-
-建议：
-
-- 用于现场模式切换、阈值调试、开始/停止，不要成为唯一控制入口。
-- 触摸坐标和显示图像坐标可能比例不同，需要映射。
-- 按钮需要消抖和“按下锁定”，避免一次触摸触发多次。
+- 先用 `uart.list_devices()` 确认设备；115200 是可靠的起始波特率，但仍以用户的下位机约束为准。
+- UART0 是 A16 TX、A17 RX、`/dev/ttyS0`，会输出启动日志，且 A16 上电被外部拉低可能导致无法启动；仅在用户已确认接线和启动风险时使用。
+- GND 必须共地，RX/TX 交叉连接；MaixCAM Type-C 转接板方向可能交换 RX/TX。
+- `write_str()` 发送 `str`，`write()` 发送 `bytes`。回调 `set_received_callback()` 与轮询 `read()` 不得混用。
+- 串口是字节流，粘包、拆包、超时、日志限流和系统启动杂字节由协议层处理。
 
 ## YOLO
 
 ```python
-from maix import nn
+from maix import app, camera, display, image, nn
 
-detector = nn.YOLOv5(model="model.mud", dual_buff=True)
-objs = detector.detect(img, conf_th=0.5, iou_th=0.45)
-for obj in objs:
-    x, y, w, h = int(obj.x), int(obj.y), int(obj.w), int(obj.h)
-    score = float(obj.score)
+detector = nn.YOLOv5(model="models/target.mud", dual_buff=True)
+cam = camera.Camera(detector.input_width(), detector.input_height(), detector.input_format())
+disp = display.Display()
+
+while not app.need_exit():
+    img = cam.read()
+    objs = detector.detect(img, conf_th=0.5, iou_th=0.45)
+    for obj in objs:
+        img.draw_rect(obj.x, obj.y, obj.w, obj.h, color=image.COLOR_RED)
+    disp.show(img)
 ```
 
-建议：
-
-- 只有传统颜色/几何方法不稳或目标外观复杂时再上 YOLO。
-- 模型输入尺寸、相机尺寸和显示尺寸要统一或明确映射。
-- YOLO 结果应结合几何/ROI/状态机过滤，避免单帧误检直接触发动作。
-- 模型加载失败必须可降级显示错误，而不是让主循环崩溃。
+- 先确认 `.mud` 模型、类别顺序、模型输入尺寸与图像格式。
+- `dual_buff=True` 会提高吞吐，但 `detect()` 的结果对应上一帧输入；严格同步的瞄准、测量或闭环控制应使用 `dual_buff=False`，或显式保存时间戳并补偿一帧延迟。
+- 置信度、IOU、ROI、尺寸和时序稳定性应结合使用；单帧模型结果不得直接触发危险动作。
+- 模型加载或格式不匹配失败时，显示错误并进入安全降级，不让主循环崩溃。
 
 ## 官方参考
 
-- MaixPy 首页: https://wiki.sipeed.com/maixpy/doc/zh/index.html
-- Camera: https://wiki.sipeed.com/maixpy/doc/zh/vision/camera.html
-- find_blobs: https://wiki.sipeed.com/maixpy/doc/zh/vision/find_blobs.html
-- UART: https://wiki.sipeed.com/maixpy/doc/zh/peripheral/uart.html
-- YOLO: https://wiki.sipeed.com/maixpy/doc/zh/vision/yolov5.html
-- TouchScreen: https://wiki.sipeed.com/maixpy/doc/zh/vision/touchscreen.html
+- MaixPy Camera: https://wiki.sipeed.com/maixpy/doc/zh/vision/camera.html
+- MaixPy find_blobs: https://wiki.sipeed.com/maixpy/doc/zh/vision/find_blobs.html
+- MaixPy UART: https://wiki.sipeed.com/maixpy/doc/zh/peripheral/uart.html
+- MaixPy YOLO: https://wiki.sipeed.com/maixpy/doc/zh/vision/yolov5.html
+- MaixPy 双缓冲: https://wiki.sipeed.com/maixpy/doc/zh/vision/dual_buff.html
+- MaixPy TouchScreen: https://wiki.sipeed.com/maixpy/doc/zh/vision/touchscreen.html
