@@ -33,7 +33,7 @@ metadata:
 - 识别对象、输出对象、精度/时限与失效后动作。
 - MaixCAM Pro 型号、相机/镜头、安装方式、相机引脚或设备信息。
 - 屏幕型号、像素尺寸、方向、是否需要触摸，以及是否需要屏幕 UI。
-- 若需要 UI：必须显示的画面、数值、状态、错误、调参入口、刷新要求和触摸/按键行为。
+- 若需要 UI：必须显示的画面、数值、状态、错误、调参入口、刷新要求和触摸/按键行为；再确认是否需要**板端运行/调参 UI 配置档**。该配置档仅在用户要求现场调参，且屏幕及触摸/按键/替代输入已确认时作为候选，不得默认启用。
 - 下位机、执行机构、引脚、逻辑电平、供电、急停、已有接线，以及心跳、ACK、序号、重发、超时和丢失策略是否已有约定。
 - 场地、光照、目标尺寸、允许/禁止使用的硬件或算法。
 
@@ -45,7 +45,7 @@ metadata:
 
 在关键配置足够后，先按 `templates/solution-options.md` 给出 2–3 套可行方案。每套方案必须同时说明：
 
-- 识别方式和降级路线：颜色/几何/标定/YOLO/融合。
+- 识别方式和降级路线：颜色/几何/标定/编码标记/YOLO/融合。
 - 通信接口、候选帧格式、信息字段、坐标单位与可靠性策略。
 - 屏幕 UI 显示内容、错误状态和现场调参入口。
 - 主循环、配置、任务、通信、显示、测试模块边界；若不需要 UI，也明确无屏幕 UI 的原因与替代观测方式。
@@ -64,10 +64,13 @@ metadata:
 - 颜色/激光：优先 `img.find_blobs()`、ROI、曝光/白平衡和时序过滤。
 - 黑线、边框、靶纸和尺寸：优先几何、标定、单应性或物理坐标映射。
 - 棋盘/格点：先定位棋盘坐标系，再做占用状态差分和落子映射。
+- 二维码/AprilTag 等编码标记：先确认需要的是载荷内容、固定 ID、角点/姿态还是测距；比较 QR 与 AprilTag 的可读距离、光照、打印尺寸、ROI 和坐标映射，不把二者视为可无条件互换。仅使用官方 MaixPy `find_qrcodes()` 或 `find_apriltags()` 等已核验 API。
 - 类别语义或复杂外观：先确认 MaixPy/固件版本与模型可用性，再选择 YOLOv5、YOLOv8、YOLO11 或 YOLO26；无数据集时使用 `templates/yolo-data-and-training.md` 先做采集、标注、训练和验证计划。
 - 混合方案：传统视觉提供几何/ROI 约束，模型输出类别或复杂目标。
 
 需要按电赛视觉模式细化识别、标定、状态和安全策略时，读取 `references/nuedc-vision-archetypes.md` 中与题面匹配的章节；不要把不相干题型的做法塞进当前工程。
+
+用户确认需要板端现场观测或调参时，读取 `references/on-device-tuning-profile.md`。它只提供可选的显示/输入/参数边界和验证规则：无屏、无输入或用户不需要调参时，继续使用现有无 UI 或替代观测方案，不生成伪造的触摸/按键逻辑。
 
 ## 已有工程与运行期联调
 
@@ -93,6 +96,7 @@ metadata:
 - 未提供 YOLO `.mud`、授权资源或必要硬件信息时，不得声称工程可完成最终任务；生成可运行的采集、相机、传统视觉或模型加载验证工程，并在入口显示缺失项和安全降级状态。
 - 打包/安装配置仅在用户要求离线应用或已有明确规范时加入；在线项目调试不依赖臆造的打包配置。
 - 最终工程必须在目标 MaixCAM 或 MaixCAM Pro 上执行性能验证，使用 `references/performance-validation.md` 和 `templates/performance-report.md` 记录帧率、端到端时延、稳定性、显示/串口负载和资源异常。未在目标板实测时，只能标记为“待实测”，不得声称性能达标。
+- 性能记录必须区分相机采集速率、视觉处理/有效检测速率和实际控制发布频率；不得以相机标称 FPS 或单一瞬时 FPS 代替闭环性能。板端调参 UI 只可在其刷新预算内运行，不得抢占安全控制或掩盖性能瓶颈。
 - 发现帧率低、时延超标、卡顿、内存增长、模型失败、通信积压或重启时，先输出问题、证据、可能瓶颈、优化选项、代价和回归测试；用户确认会改变精度、视觉路线或闭环时序的优化后再实施。
 
 完整目录约束见 `templates/project-architecture.md`，MaixVision 打开、运行和资源问题见 `references/maixvision-debugging.md`，性能验证见 `references/performance-validation.md`。
@@ -154,3 +158,5 @@ while not app.need_exit():
 - MaixPy Camera: https://wiki.sipeed.com/maixpy/doc/zh/vision/camera.html
 - MaixPy find_blobs: https://wiki.sipeed.com/maixpy/doc/zh/vision/find_blobs.html
 - MaixPy YOLO: https://wiki.sipeed.com/maixpy/doc/zh/vision/yolov5.html
+- MaixPy 二维码: https://wiki.sipeed.com/maixpy/doc/zh/vision/qrcode.html
+- MaixPy AprilTag: https://wiki.sipeed.com/maixpy/doc/zh/vision/apriltag.html
